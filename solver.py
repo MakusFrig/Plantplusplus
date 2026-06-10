@@ -63,7 +63,7 @@ def prep_data(best_systems):
 
         temp_splits = []
 
-        for each_sep in _.seperators:
+        for each_sep in _.separators:
 
             temp_splits += each_sep.splits[0] #for now lets just have it solve for the overflow
 
@@ -99,8 +99,24 @@ def prep_data(best_systems):
 
     return sources, splits
 
-#A helper fucntion for loading system data from csv
-def prep_csv_data(data):
+#A helper function for getting an empty nested dictionary for the splits
+def get_empty_splits(splits):
+
+    temp_splits = copy.deepcopy(splits)
+    #now we clear it
+
+    for each_sep in temp_splits.keys():
+
+        for each_outflow in temp_splits[each_sep].keys():
+
+            for each_feature in temp_splits[each_sep][each_outflow].keys():
+
+                temp_splits[each_sep][each_outflow][each_feature] = []
+
+    return temp_splits
+
+#A helper fucntion for loading solver results to usable arrays for regression analysis
+def prep_solver_results(data):
 
     #data will be an array of sources and splits
     # data = [[sources1, splits1], [sources2, splits2]]
@@ -123,16 +139,26 @@ def prep_csv_data(data):
     #basically now because we know that the splits are the"y"
     #what we're solving for 
     #we make it so that each array is the 12 months of the recovery pct
+    #because these are nested dictionaries we want to get copy the first one, empty it and then fill it
 
-    temp_splits = [[] for i in range(len(splits[0]))]
+    temp_splits = get_empty_splits(splits[0])
+
+    #now its cleared we can populate it
 
     for each_case in splits:
 
-        for i in range(len(each_case)):
+        for each_sep in temp_splits.keys():
 
-            temp_splits[i].append(each_case[i])
+            for each_outflow in temp_splits[each_sep].keys():
+
+                for each_feature in temp_splits[each_sep][each_outflow].keys():
+
+                    temp_splits[each_sep][each_outflow][each_feature].append(
+                        each_case[each_sep][each_outflow][each_feature]
+                    )
 
     splits = temp_splits
+
 
     #from here we have the splits as well as the 
     #the issue here is that the sources are in tonnes
@@ -151,26 +177,34 @@ def prep_csv_data(data):
 #
 #Function to take all the resulting equations and return the equations with the best r2
 #
-def determine_best_equations(all_equations, seperator_feature_names):
+def determine_best_equations(all_equations, separator_feature_names):
 
-    #all equations contains a list of each equation for each seperator feature
-    #within this list, sort it to get the best one
-    #then replace the name of recovery = with the actual feature name
-    #define a function to print this out best
+    #gotta rewrite this function
+    #all equations is a nested dictionary like everything else
 
-    for each_fe in range(len(seperator_feature_names)):
+    for each_sep in all_equations.keys():
 
-        best_equation = sorted(all_equations[each_fe], key=lambda x: x[1], reverse = True)[0]
+        for each_outflow in all_equations[each_sep].keys():
 
-        best_equation[1] = best_equation[1].replace("Recovery = ", f"{seperator_feature_names[each_fe]} = ")
+            for each_feature in all_equations[each_sep][each_outflow].keys():
 
-        print(best_equation)
-    return
+                best_equation = sorted(all_equations[each_sep][each_outflow][each_feature], key=lambda x: x[1], reverse = True)[0]
+
+                #best_equation[1] = best_equation[1].replace("Recovery = ", f"{separator_feature_names[each_fe]} = ")
+
+                #print(best_equation)
+
+                #from here we want to replace all of them with the best one
+
+                all_equations[each_sep][each_outflow][each_feature] = best_equation
+    
+
+    return all_equations
 
 #
 #Function to run all the different types of regression and return which ones have the best r2 score
 #
-def run_all_regression(sources, splits, feature_names=None, seperator_feature_names=None):
+def run_all_regression(sources, splits, feature_names=None, separator_feature_names=None):
 
     if feature_names == None:
 
@@ -178,63 +212,34 @@ def run_all_regression(sources, splits, feature_names=None, seperator_feature_na
 
     #now from here run the various regression types
 
-    all_equations = [[] for i in range(len(splits))] #this will be a list to hold all the equations found
+
+
+    all_equations = get_empty_splits(splits)#this will be a list to hold all the equations found
     #there will be an array for each split "y" value
 
-    #print(seperator_feature_names)
+    #print(all_equations)
+
+    #print(separator_feature_names)
 
     #lets start with linear
+    #and then add whatever you want 
 
-    #define a lambda function for adding to the all_equations
+    data_variants = [
+        (sources, feature_names),
+        get_polynomial_data(sources, feature_names, degree=2),
+        get_exponential_inputs(sources, feature_names),
+        get_negative_exponential_inputs(sources, feature_names),
+        get_logarithmic_data(sources, feature_names)
+    ]
 
-    append_to_all_equations = lambda sep_feature_index, equation_results: all_equations[sep_feature_index].append(equation_results)
+    #regression and append results
+    for src, feat in data_variants:
+        all_equations = run_linear_regression(src, splits,  feat, all_equations)
+        
 
-    linear_results = run_linear_regression(sources, splits, feature_names)
+        
 
-    for each_eq in range(len(linear_results)):
-
-        all_equations[each_eq].append(linear_results[each_eq])
-
-    #all_equations[i].append(linear_results[i]) for i in range(len(linear_results))
-
-    #now try the rest
-
-    poly_sources, poly_feature_names = get_polynomial_data(sources, feature_names, degree=2)
-
-    poly_results = run_linear_regression(poly_sources, splits, poly_feature_names)
-
-    for each_eq in range(len(poly_results)):
-
-        all_equations[each_eq].append(poly_results[each_eq])
-
-    exp_sources, exp_feature_names = get_exponential_inputs(sources, feature_names)
-
-    exp_results = run_linear_regression(exp_sources, splits, exp_feature_names)
-
-    for each_eq in range(len(exp_results)):
-
-        all_equations[each_eq].append(exp_results[each_eq])
-
-    nexp_sources, nexp_feature_names = get_negative_exponential_inputs(sources, feature_names)
-
-    nexp_results = run_linear_regression(nexp_sources, splits, nexp_feature_names)
-
-    for each_eq in range(len(nexp_results)):
-
-        all_equations[each_eq].append(nexp_results[each_eq])
-
-    log_sources, log_feature_names = get_logarithmic_data(sources, feature_names)
-
-    log_results = run_linear_regression(log_sources, splits, log_feature_names)
-
-    for each_eq in range(len(log_results)):
-
-        all_equations[each_eq].append(log_results[each_eq])
-
-    #from here we want to apply the separator feature names and determine the best based on the r2 score
-
-    determine_best_equations(all_equations, seperator_feature_names)    
-
+    all_equations = determine_best_equations(all_equations, separator_feature_names)    
     return all_equations
 
 #
@@ -323,7 +328,7 @@ def get_logarithmic_data(sources, feature_names):
 #
 #Function for exponential regression
 #
-def run_linear_regression(sources, splits, feature_names, output=False):
+def run_linear_regression(sources, splits, feature_names, all_equations, output=False):
 
     #start the leave on out
     loo = LeaveOneOut()
@@ -332,68 +337,77 @@ def run_linear_regression(sources, splits, feature_names, output=False):
 
     #create an array for storing the equations we come up with
 
-    all_equations = []
+    #all_equations = copy.deepcopy(splits)
 
     #now can run the linear regression on these terms
 
-    for each_split in range(len(splits)):
-        y = np.array(splits[each_split]) #turny into a numpy array for ease
+    #updated splits are nested in dictionaries
 
-        loo_preds = np.zeros(len(y))
-        
-        #now loop through each case
-        for train_index, test_index in loo.split(new_X):
-            X_train, X_test = new_X[train_index], new_X[test_index]
-            y_train, y_test = y[train_index], y[test_index]
-            
-            #try and fit the model on 11 months of data
-            cv_model = LinearRegression()
-            cv_model.fit(X_train, y_train)
-            
-            #predict the last case
-            loo_preds[test_index] = cv_model.predict(X_test)
-            
-        #now get the r2 score
-        val_r2 = r2_score(y, loo_preds)
-        
-        #now train the model on all the data
-        model = LinearRegression()
-        model.fit(new_X, y)
-        
-        #and get he r2 score again
-        train_pred = model.predict(new_X)
-        train_r2 = r2_score(y, train_pred)
+    for each_sep in splits.keys():
 
-        if output == True:
+        for each_outflow in splits[each_sep].keys():
 
-            print(
-                f"\nRegression\n"
-                f"  Training R2 (In-Sample):  {train_r2:.5f}\n"
-                f"  Validation R2 (LOOCV):    {val_r2:.5f}"
-            )
-        #now get the equation ai wrote this
-        equation_terms = [f"{model.intercept_:.4f}"]
-        
-        for coef, name in zip(model.coef_, feature_names):
-            clean_name = name.replace(" ", " * ")
-            
-            if coef >= 0:
-                equation_terms.append(f"+ {coef:.7f} * ({clean_name})")
-            else:
-                equation_terms.append(f"- {abs(coef):.7f} * ({clean_name})")
-        
-        full_equation = "Recovery = " + " ".join(equation_terms)
-
-        #from here package the equation and the r2 score and append to the possible equations
-        function_package = [train_r2, full_equation]
-
-        all_equations.append(function_package)
+            for each_feature in splits[each_sep][each_outflow].keys():
 
 
-        if output == True:
 
-            print(f"  {full_equation}")
-            print("-" * 60)
+                y = np.array(splits[each_sep][each_outflow][each_feature]) #turny into a numpy array for ease
+
+                loo_preds = np.zeros(len(y))
+                
+                #now loop through each case
+                for train_index, test_index in loo.split(new_X):
+                    X_train, X_test = new_X[train_index], new_X[test_index]
+                    y_train, y_test = y[train_index], y[test_index]
+                    
+                    #try and fit the model on 11 months of data
+                    cv_model = LinearRegression()
+                    cv_model.fit(X_train, y_train)
+                    
+                    #predict the last case
+                    loo_preds[test_index] = cv_model.predict(X_test)
+                    
+                #now get the r2 score
+                val_r2 = r2_score(y, loo_preds)
+                
+                #now train the model on all the data
+                model = LinearRegression()
+                model.fit(new_X, y)
+                
+                #and get he r2 score again
+                train_pred = model.predict(new_X)
+                train_r2 = r2_score(y, train_pred)
+
+                if output == True:
+
+                    print(
+                        f"\nRegression\n"
+                        f"  Training R2 (In-Sample):  {train_r2:.5f}\n"
+                        f"  Validation R2 (LOOCV):    {val_r2:.5f}"
+                    )
+                #now get the equation ai wrote this
+                equation_terms = [f"{model.intercept_:.4f}"]
+                
+                for coef, name in zip(model.coef_, feature_names):
+                    clean_name = name.replace(" ", " * ")
+                    
+                    if coef >= 0:
+                        equation_terms.append(f"+ {coef:.7f} * ({clean_name})")
+                    else:
+                        equation_terms.append(f"- {abs(coef):.7f} * ({clean_name})")
+                
+                full_equation = "Recovery = " + " ".join(equation_terms)
+
+                #from here package the equation and the r2 score and append to the possible equations
+                function_package = [train_r2, full_equation, model] #gotta put the model in there in case we want to use
+
+                all_equations[each_sep][each_outflow][each_feature].append(function_package)
+
+
+                if output == True:
+
+                    print(f"  {full_equation}")
+                    print("-" * 60)
 
     #basically from here we return the index of the "y" along with the equation in plan english
     #and the r2 score so that we can compare them all in the end
