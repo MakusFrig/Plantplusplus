@@ -1,6 +1,0 @@
-stream_name,ore_tons,water_tons,solids_tons
-feed,36100,84500,12500
-of_secondary_overflow,14000,49000,2900
-of_secondary_underflow,6000,11000,1900
-uf_secondary_overflow,6900,15000,2500
-uf_secondary_underflow,9200,9500,5200
