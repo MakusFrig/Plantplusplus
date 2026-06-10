@@ -1,0 +1,8 @@
+source,PSC_Source,PSC,
+separator,PSC,SSC1,SSC2
+separator,SSC1,SSC1_OF,SSC1_UF
+separator,SSC2,SSC2_OF,SSC2_UF
+collector,SSC1_OF,,
+collector,SSC1_UF,,
+collector,SSC2_OF,,
+collector,SSC2_UF,,
