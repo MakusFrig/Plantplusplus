@@ -1,7 +1,7 @@
 #this is a util file to deal with better input and output
 import csv
 
-import json
+import pathlib
 
 import numpy as np
 
@@ -9,12 +9,6 @@ from objects import *
 
 from system import *
 
-#define some global variables here
-
-DEFAULT_SPLITS = [
-	[0.5, 0.5, 0.5],
-	[0.5, 0.5, 0.5]
-]
 
 #Function to fetch inputs and outputs for a mass balance system
 def get_mass_balance_csv(filename, system):
@@ -23,7 +17,7 @@ def get_mass_balance_csv(filename, system):
 
 	valid_sources = system.sources_names
 
-	valid_separators = system.seperators_names #this is important for setting the default splits later
+	valid_separators = system.separators_names #this is important for setting the default splits later
 
 	valid_collectors = system.collectors_names	
 	#first get an object
@@ -119,7 +113,7 @@ def get_system_csv(filename):
 	#from here we have each entry, now we need to go through and create the system
 
 	#create blank arrays to return later
-	system_sources, system_seperators, system_collectors = [], [], []
+	system_sources, system_separators, system_collectors = [], [], []
 
 	for row in reader:
 
@@ -137,14 +131,14 @@ def get_system_csv(filename):
 				Source(src_name, src_dest)
 			)
 
-		elif row[0] == "seperator":
+		elif row[0] == "separator":
 
-			sep_name = row[1] #seperator name
+			sep_name = row[1] #separator name
 
 			sep_dests = row[2:]
 
-			system_seperators.append(
-				Seperator(sep_name, sep_dests)
+			system_separators.append(
+				Separator(sep_name, sep_dests)
 			)
 
 
@@ -165,175 +159,12 @@ def get_system_csv(filename):
 	file_obj.close()
 
 
-	return System(system_sources, system_seperators, system_collectors)
-
-#this function will get a system from a json file
-def get_system_json(filename):
-
-	file_obj = open(filename, "r")
-
-	data = json.load(file_obj)
-
-	#now from here we have data which is a dictionary of 'nodes' and 'edges'
-
-	nodes = data["nodes"]
-	edges = data["edges"]
-
-	system_collectors = []
-
-	system_seperators = []
-
-	system_sources = []
-
-	#start by iterating through the nodes
-
-	for each_node in nodes:
-
-		#check what type it is
-
-		if each_node["type"] == "Plant.SourceNode":
-
-
-			#we have a source
-
-			system_sources.append(
-				Source(each_node["name"]) #we dont need to do the destination yet
-			)
-
-			#we also generally have a slurry in the data
-
-			temp_slurry = list(each_node["data"].values())
-
-			#now set the slurry
-
-			system_sources[len(system_sources)-1].set_slurry(temp_slurry)
-
-		elif each_node["type"] == "Plant.SeparatorNode":
-
-			
-
-			#we have a seperator
-
-			system_seperators.append(
-				Seperator(each_node["name"])
-			)
-
-			#from here we want to get the splits and add those
-
-			temp_splits = list(each_node["data"].values())
-
-			#now we have splits but need to transpose them
-
-			temp_splits = list(map(list, zip(*temp_splits)))
-
-			system_seperators[len(system_seperators)-1].set_splits(temp_splits)
-
-
-
-		elif each_node["type"] == "Plant.CollectorNode":
-
-			#we have a collector
-
-			system_collectors.append(
-				Collector(each_node["name"])
-			)
-
-			temp_slurry = list(each_node["data"].values())
-
-			#now set the slurry
-
-			system_collectors[len(system_collectors)-1].set_slurry(temp_slurry)
-
-		else:
-			
-
-			print("Error: Node of Unknown Type")
-
-	#from here we create name lists 
-
-	#now from here we iterate through the edges and add these destinations
-
-	for each_edge in edges:
-
-		#we iterate through the sources
-
-		edge_start = each_edge["from"].split(":")[0]
-
-		edge_start_output = each_edge["from"].split(":")[1]
-
-		edge_end = each_edge["to"].split(":")[0]
-
-		edge_end_input = each_edge["to"].split(":")[1]
-
-		is_src = False
-
-		for each_src in system_sources:
-
-			if each_src.name == edge_start:
-
-				#now we have which source is coming from
-
-				each_src.set_destination(edge_end)
-
-				is_src = True
-
-				break
-
-		#now check if it was a src
-
-		if is_src:
-
-			continue
-
-		#otherwise we check the collectors which is more tricky
-
-		is_sep = False
-
-		for each_sep in system_seperators:
-
-			if each_sep.name == edge_start:
-
-				#now we have which seperator its coming from
-
-				#from here we need to figure out which output it is from the seperator
-
-				destination_index = int(edge_start_output[6:])-1
-
-
-
-				each_sep.set_destination(destination_index, edge_end)
-
-				
-
-				is_sep = True
-
-				break
-
-		#now check if it was a separator
-
-		if is_sep:
-
-			continue
-
-		else:
-
-			print("Error: Edge has Unknown Start/Finish")
-
-			return
-
-
-	#from here lets output our system
-
-	
-
-
-
-	return System(system_sources, system_seperators, system_collectors)
+	return System(system_sources, system_separators, system_collectors)
 
 #this function will get a testcase with slurry data for the system inputs and expected outputs
 def get_testcase_csv(filename, system):
 
-	#create two dictionaries that will be returned seperatley
+	#create two dictionaries that will be returned separatley
 
 	inputs = dict.fromkeys(system.sources_names)
 
@@ -443,19 +274,19 @@ def give_default_splits(system, slurry_length):
 		[0.5, 0.5, 0.5]
 	]
 
-	for each_s in range(len(system.seperators)):
+	for each_s in range(len(system.separators)):
 
-		temp_outflows = system.seperators[each_s].num_outflows
+		temp_outflows = system.separators[each_s].num_outflows
 
 		temp_split = [
 			[0.5 for e in range(slurry_length)] for i in range(temp_outflows)
 		]
 
-		system.seperators[each_s].set_splits(temp_split)
+		system.separators[each_s].set_splits(temp_split)
 
 		#the other thing we want to do here is save the slurry length
 
-		system.seperators[each_s].slurry_length = slurry_length
+		system.separators[each_s].slurry_length = slurry_length
 
 
 	return system
@@ -463,7 +294,7 @@ def give_default_splits(system, slurry_length):
 #A helper function to get the slurry feature names
 def get_feature_names(foldername):
 
-	file_obj = open(f"test_cases/{foldername}/mass_balance.csv")
+	file_obj = open(f"cases/{foldername}/mass_balance.csv")
 
 	csv_reader = csv.reader(file_obj)
 
@@ -479,7 +310,7 @@ def get_separator_names(foldername, feature_names):
 
 	num_features = len(feature_names)
 
-	file_obj = open(f"test_cases/{foldername}/system_def.csv")
+	file_obj = open(f"cases/{foldername}/system_def.csv")
 
 	csv_reader = csv.reader(file_obj)
 
@@ -487,7 +318,7 @@ def get_separator_names(foldername, feature_names):
 
 	for row in csv_reader:
 
-		if row[0] == "seperator":
+		if row[0] == "separator":
 
 			name = row[1]
 
@@ -496,18 +327,27 @@ def get_separator_names(foldername, feature_names):
 			separator_names[name] = num_outflows #this is just the number of outflows
 	#from here need to construct separator_feature_names for each separator, each outflow and each feature
 
-	separator_feature_names = []
+	separator_feature_names = {}
 
 	for each_sep in separator_names.keys():
 
+		separator_feature_names[each_sep] = {}
+
 		for each_outflow in range(separator_names[each_sep]):
+
+			separator_feature_names[each_sep][each_outflow+1] = {}
 
 			for each_feature in feature_names:
 
-				separator_feature_names.append(
+				#changing it to a dictionary
+				#basically just giving an empty dictionary ready to fill with their corresponding model
+
+				separator_feature_names[each_sep][each_outflow+1][each_feature] = []
+
+				"""separator_feature_names.append(
 					#here we constrcut what the "y" feature name will be
 					f"{each_sep}>Outflow{each_outflow+1}>{each_feature} Recovery"
-				)
+				)"""
 
 
 	return separator_feature_names
@@ -521,8 +361,11 @@ def give_defualt_collector_slurry(system, slurry_length):
 
 	return system
 
-#This function will take a filename and unpack it and return a system
-def input_system_results_csv(filename):
+#
+#This function will take a filename (from the results folder) and unpack it 
+#and return the sources and splits in array format
+#
+def get_solver_results_csv(filename, feature_names):
 
 	csv_data = []
 
@@ -544,7 +387,7 @@ def input_system_results_csv(filename):
 
 	sources = []
 
-	splits = []
+	splits = {}
 
 	for each_row in csv_data:
 
@@ -590,12 +433,24 @@ def input_system_results_csv(filename):
 
 				#in this case we want to add the separator splits
 
-				for i in each_row[1:]:
+				#we're storing the splits in a dictionary so that its easiest to recreate the systm
+				#after regression and model new inputs
 
-					#need to get all the splits in case of 3+ outflows
-					#each split will then need to be calculated
+				#itll be seperator name, outflow, feature
 
-					splits.append(float(i))
+				splits[each_row[0]] = {}
+
+				num_outflows = int(len(each_row[1:])/slurry_length)
+
+				for each_outflow in range(num_outflows):
+
+					splits[each_row[0]][each_outflow] = {}
+
+					for each_feature in range(slurry_length):
+
+						splits[each_row[0]][each_outflow][feature_names[each_feature]] = float(each_row[1 + int(slurry_length*each_outflow) + each_feature])
+
+				
 
 				
 
@@ -619,20 +474,20 @@ def output_system_csv(filename, system):
 
 		csv_data.append([system.sources_names[each_src]] + temp_slurry)
 
-	for each_s in range(len(system.seperators)):
+	for each_s in range(len(system.separators)):
 
 		flat_splits = []
 
-		for each_split in range(len(system.seperators[each_s].splits)):
+		for each_split in range(len(system.separators[each_s].splits)):
 
-			temp_splits = system.seperators[each_s].splits
+			temp_splits = system.separators[each_s].splits
 
 			flat_splits += temp_splits[each_split]
 
 
 
 		csv_data.append(
-			[system.seperators_names[each_s]] + flat_splits
+			[system.separators_names[each_s]] + flat_splits
 		)
 
 	for each_c in range(len(system.collectors)):
@@ -664,15 +519,15 @@ def compare_systems(system1, system2):
 
 	differences = []
 
-	for each_sep in range(len(system1.seperators)):
+	for each_sep in range(len(system1.separators)):
 
-		for each_quality in range(len(system1.seperators[each_sep].splits[0])):
+		for each_quality in range(len(system1.separators[each_sep].splits[0])):
 
-			temp_diff = abs(system1.seperators[each_sep].splits[0][each_quality]-system2.seperators[each_sep].splits[0][each_quality])
+			temp_diff = abs(system1.separators[each_sep].splits[0][each_quality]-system2.separators[each_sep].splits[0][each_quality])
 
 			
 
-			temp_diff /= max(system1.seperators[each_sep].splits[0][each_quality], 0.00001) #need to have something to avoid 0 error
+			temp_diff /= max(system1.separators[each_sep].splits[0][each_quality], 0.00001) #need to have something to avoid 0 error
 			#remember to divide to get in % as the systems get compared as a percentage not absolute difference
 
 			differences.append(temp_diff)
@@ -684,6 +539,67 @@ def compare_systems(system1, system2):
 
 	return np.median(np.array(differences))
 
+
+#Helper function for the CLI to print out the case options
+def print_usable_cases():
+
+	case_dir = "cases"
+
+	case_dir = pathlib.Path.cwd()  /  case_dir
+
+	print("Case Options: ")
+
+	for each_folder in case_dir.iterdir():
+
+		if each_folder.is_dir():
+
+			print(f"{each_folder.name}", end=" ")
+
+	print("") #just se we get to the newline
+
+	return
+
+#Helper function for the CLI to print out the mass_balance inputs for modelling
+def print_usable_model_inputs():
+
+	model_dir = "modelling"
+
+	model_dir = pathlib.Path.cwd() / model_dir
+
+	print("Input Options: ")
+
+	for each_file in model_dir.iterdir():
+
+		if each_file.is_file():
+
+			print(f"{each_file.name}", end=" ")
+
+	print("")
+
+	return
+
+#A function to load new inputs to try with the regression model
+def load_new_inputs_csv(inputname):
+
+	file_obj = open(f"modelling/{inputname}")
+
+	csv_reader = csv.reader(file_obj)
+
+	data = []
+
+	for row in csv_reader:
+
+		data.append(row)
+
+	sources = {}
+
+	for each_row in range(1, len(data)): #gotta start at 1 to ignore the header
+
+		sources[data[each_row][0]] = [float(i) for i in data[each_row][1:]]
+
+	#from here we have the sources and their input slurries in a dictionary
+
+	return sources
 
 if __name__ == "__main__":
 
