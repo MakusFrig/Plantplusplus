@@ -6,11 +6,11 @@ from objects import *
 
 class System:
 
-	def __init__(self, sources, seperators, collectors):
+	def __init__(self, sources, separators, collectors):
 
-		self.seperators = seperators
+		self.separators = separators
 
-		self.seperators_names = [e.name for e in self.seperators]
+		self.separators_names = [e.name for e in self.separators]
 
 		self.collectors = collectors
 
@@ -24,42 +24,41 @@ class System:
 
 	def __repr__(self):
 
-		return f"{self.sources}\n{self.seperators}\n{self.collectors}"
+		return f"{self.sources}\n{self.separators}\n{self.collectors}"
 
+	#Function to run a simulation of the processing plant
 	def run(self, n):
-
-
 
 		#basically we need to go through and do things in a specific order
 		#0. Input from all the sources
-		#1. mix all of the input slurries in the seperators + collectors
-		#2. run the seperations
-		#3. clear all of the inputs in the seperators
-		#4. output the seperators to the other seperators or collectors
+		#1. mix all of the input slurries in the separators + collectors
+		#2. run the separations
+		#3. clear all of the inputs in the separators
+		#4. output the separators to the other separators or collectors
 		#5. repeat n times
 
 		for each_iter in range(n):
 
 			for each_source in self.sources:
 
-				#we then need to go through the seperators and collectors until we find the destination name
+				#we then need to go through the separators and collectors until we find the destination name
 
 				#create a variable to tell us if we found the destination of the slurry
 				found_dest = False
 
-				for each_name in range(len(self.seperators_names)):
+				for each_name in range(len(self.separators_names)):
 
-					if self.seperators_names[each_name] == each_source.dest:
+					if self.separators_names[each_name] == each_source.dest:
 
 						#in this case we found the destination and have the index of the where the source is
 
 						#this creates a slurry proportional to trials
-						#you need to do this basically to improve accuracy of seperating
+						#you need to do this basically to improve accuracy of separating
 						#more so for complex system and small n but otherwise it will
 						#input the monthly slurry as the "hourly" or wtv you set n to
 						portion_slurry = [i/n for i in each_source.slurry] 
 
-						self.seperators[each_name].add_slurry(portion_slurry)
+						self.separators[each_name].add_slurry(portion_slurry)
 
 						found_dest = True
 
@@ -87,7 +86,7 @@ class System:
 
 				if not found_dest:
 
-					print("Error: Source does not connect to a Seperator or a Collector")
+					print("Error: Source does not connect to a Separator or a Collector")
 
 					return
 
@@ -95,11 +94,11 @@ class System:
 
 			#from here we have completed step 0 and have added slurries from the sources
 
-			#from here we go to step 1 and mix all of the input slurries in the seperators and collectors
+			#from here we go to step 1 and mix all of the input slurries in the separators and collectors
 
-			for each_sep in range(len(self.seperators)):
+			for each_sep in range(len(self.separators)):
 
-				self.seperators[each_sep].create_input()
+				self.separators[each_sep].create_input()
 
 			for each_col in range(len(self.collectors)):
 
@@ -107,19 +106,19 @@ class System:
 
 			#from here we have completed step 1 and mixed all of the input slurries
 
-			#from here we go to step 2 and seperate everything
+			#from here we go to step 2 and separate everything
 
-			for each_sep in range(len(self.seperators)):
+			for each_sep in range(len(self.separators)):
 
-				self.seperators[each_sep].seperate()
+				self.separators[each_sep].separate()
 
-			#from here we have completed step 2 and seperated all of the input slurries
+			#from here we have completed step 2 and separated all of the input slurries
 
-			#now we go to step 3 and eliminate the input to all the collectors and seperators
+			#now we go to step 3 and eliminate the input to all the collectors and separators
 
-			for each_sep in range(len(self.seperators)):
+			for each_sep in range(len(self.separators)):
 
-				self.seperators[each_sep].clear_inputs()
+				self.separators[each_sep].clear_inputs()
 
 			for each_col in range(len(self.collectors)):
 
@@ -127,29 +126,29 @@ class System:
 
 			#from here step 3 is complete and all of the inputs are empty
 
-			#now we go to step 4 and add the outputs from the seperators to the inputs and their destinations
+			#now we go to step 4 and add the outputs from the separators to the inputs and their destinations
 
-			#we need to loop through the seperators, then loop through the rest of the system to identify destinations and add them
+			#we need to loop through the separators, then loop through the rest of the system to identify destinations and add them
 
-			for each_sep in range(len(self.seperators)):
+			for each_sep in range(len(self.separators)):
 
 				#now we need to go through the destinations (will work with 2 or 3)
 
 				
 
-				temp_sep = self.seperators[each_sep]
+				temp_sep = self.separators[each_sep]
 
 				#from here we iterate through the destinations
 
 				for ind1 in range(temp_sep.num_outflows):
 
-					if temp_sep.destinations[ind1] in self.seperators_names:
+					if temp_sep.destinations[ind1] in self.separators_names:
 
 						#in this case we output to another separator
 
-						dest_index = self.seperators_names.index(temp_sep.destinations[ind1])
+						dest_index = self.separators_names.index(temp_sep.destinations[ind1])
 
-						self.seperators[dest_index].add_slurry(temp_sep.output_slurries[ind1])
+						self.separators[dest_index].add_slurry(temp_sep.output_slurries[ind1])
 
 					elif temp_sep.destinations[ind1] in self.collectors_names:
 
@@ -195,18 +194,18 @@ class System:
 
 
 
-	#this function will go through the seperators, collectors, sources and print out the information of the system
+	#this function will go through the separators, collectors, sources and print out the information of the system
 	def output_system(self):
 
 		#start by outputting info about the sources
 
 		for each_source in self.sources:
 
-			print(f"Source    - Name:{each_source.name} Slurry:{each_source.slurry}")
+			print(f"Source - Name:{each_source.name} Slurry:{each_source.slurry}")
 
-		for each_sep in self.seperators:
+		for each_sep in self.separators:
 
-			print(f"Seperator - Name:{each_sep.name}")
+			print(f"Separator - Name:{each_sep.name}")
 
 			for each_split in each_sep.splits:
 
@@ -223,7 +222,7 @@ class System:
 
 	def clear_slurries(self):
 
-		for each_s in self.seperators:
+		for each_s in self.separators:
 
 			each_s.clear_slurries()
 
