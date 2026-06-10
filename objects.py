@@ -1,7 +1,7 @@
 #this file stores all the objects and their functions
 
 
-class Seperator:
+class Separator:
 
 	def __init__(self, name, destinations=["", "", ""], splits=[]):
 
@@ -40,36 +40,22 @@ class Seperator:
 		self.num_outflows = len(destinations)
 
 
-
-
-
-
-		
-
 		self.splits = splits
 
 	def __repr__(self):
-
-		
 
 		return f"{self.name}\nDestinations:{self.destinations}\nSplits:{self.splits}"
 
 	#this function will add a destination
 	def set_destination(self, dest_index, destination):
 
-
-
 		self.destinations[dest_index] = destination
-
 
 		#need to make sure to update the number of outflows
 
 		self.num_outflows = len(self.destinations)
 
-
-
-
-	#this function will add a slurry to the seperators input slurries
+	#this function will add a slurry to the separators input slurries
 	def add_slurry(self, input_slurry):
 
 		self.input_slurries.append(input_slurry)
@@ -95,9 +81,7 @@ class Seperator:
 
 				self.input[i] += each_slurry[i]
 
-
 		return
-
 
 	def clear_inputs(self):
 
@@ -111,14 +95,12 @@ class Seperator:
 
 		#need to use loops because the slurry length can vary
 
-		
-
 		self.output_slurries = [[0 for i in range(self.slurry_length)] for _ in range(self.num_outflows)]
 
 		return
 
-	#this function will seperate whatever is the input
-	def seperate(self):
+	#this function will separate whatever is the input
+	def separate(self):
 
 		#this will work regardless of 2 or 3 destinations
 
@@ -128,21 +110,13 @@ class Seperator:
 
 			for each_comp in range(len(self.input)):
 
-
-
 				temp_amount = self.input[each_comp] * self.splits[ind1][each_comp]
-
-				
-
-
 
 				self.output_slurries[ind1].append(temp_amount)
 
-
-
 		return
 
-#a source just holds one slurry and supplies it to a seperators or something
+#a source just holds one slurry and supplies it to a separators or something
 class Source:
 
 	def __init__(self, name, destination=None, slurry=[]):
@@ -178,9 +152,6 @@ class Collector:
 
 		self.input_slurries = []
 
-		
-
-
 
 	def __repr__(self):
 
@@ -206,8 +177,6 @@ class Collector:
 			for e in range(len(self.slurry)):
 
 				self.slurry[e] += each_slurry[e]
-
-
 
 		return
 
