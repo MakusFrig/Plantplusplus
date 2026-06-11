@@ -26,6 +26,8 @@ import pathlib
 
 import pyfiglet
 
+import pickle
+
 #imports from other files
 
 from objects import *
@@ -361,7 +363,7 @@ def simulate_iteration(system, sys_outputs, trials, tolerance, tolerance_dec, si
 #
 #This function will run a simulation for one case
 #
-def simulate_case(system, sys_outputs, trials, tolerance=100,tolerance_dec=10, sim_runtime=500,max_systems = 5):
+def simulate_case(system, sys_outputs, trials, tolerance=100,tolerance_dec=10, sim_runtime=500,max_systems = 5, target_error=0.05):
 
 	original_tolerance = tolerance
 
@@ -394,6 +396,12 @@ def simulate_case(system, sys_outputs, trials, tolerance=100,tolerance_dec=10, s
 
 		best_systems = sorted(new_best_systems, key = lambda x:x[1])[:max_systems]
 
+		#lets just check if the best system is below the target error so we can end the cycle and return what we have saving processing time
+
+		if best_systems[0][1] < target_error*100:
+
+			break
+
 		#from here we want to add to the output of how many systems are being evaluated
 
 		print(f"\tCurrent Possible Solves: {len(best_systems)}", end="", flush=True)
@@ -412,7 +420,7 @@ def simulate_case(system, sys_outputs, trials, tolerance=100,tolerance_dec=10, s
 #
 #Function to run multiple cases through the solver
 #
-def solve_multiple_cases(system, mass_balance, foldername,trials=1000, tolerance=100,tolerance_dec=2,sim_runtime=25):
+def solve_multiple_cases(system, mass_balance, foldername,trials=1000, tolerance=100,tolerance_dec=2,sim_runtime=25, target_error=0.05):
 
 	#basically what we need to do is go through each test case,
 	#run the simulation
@@ -444,7 +452,7 @@ def solve_multiple_cases(system, mass_balance, foldername,trials=1000, tolerance
 
 		#from here run the simulation
 
-		best_system_s = simulate_case(copy_system, copy_outputs, trials=trials, tolerance=tolerance, tolerance_dec = tolerance_dec, sim_runtime=sim_runtime,max_systems = 10)
+		best_system_s = simulate_case(copy_system, copy_outputs, trials=trials, tolerance=tolerance, tolerance_dec = tolerance_dec, sim_runtime=sim_runtime,max_systems = 10, target_error=target_error)
 
 		best_system_s = sorted(best_system_s, key = lambda x:x[1])
 
@@ -502,7 +510,7 @@ def run_regression_analysis(foldername):
 #
 #Function to create and run a model on new data based on the solver and regression (work in progress)
 #
-def simulate_new_inputs(inputname,foldername):
+def simulate_new_inputs(inputname,foldername, modelname = None):
 
 	#this function will have to take the the new inputs
 	# 1. Run regression on the specified system
@@ -511,9 +519,25 @@ def simulate_new_inputs(inputname,foldername):
 	# 4. Run the system simulation (throw warning if outside of training bounds)
 	# 5. Return the mass balance with these new inputs
 
-	all_equations = run_regression_analysis(foldername)
+	if modelname != None:
+
+		model_save_name = "modelling/models/" + modelname
+
+		with open(model_save_name, "rb") as file_obj:
+
+			load_package = pickle.load(file_obj)
+
+		file_obj.close()
+
+		all_equations, chosen_feature_names = load_package[0], load_package[1]
+
+	else:
+
+		all_equations, chosen_feature_names = run_regression_analysis(foldername) #this gets all of the best defined equations from the analysis
 
 	sources = load_new_inputs_csv(inputname)
+
+	feature_names = get_feature_names(foldername)
 
 	#convert the sources
 
@@ -521,13 +545,47 @@ def simulate_new_inputs(inputname,foldername):
 
 	for each_src in sources.keys():
 
+		total = sum(sources[each_src])
+
 		for each_feature in sources[each_src]:
 
-			new_X.append(each_feature) #this is because of how inputs need to be for the regression model
+			new_X.append(round(each_feature/total, 8)) #this is because of how inputs need to be for the regression model
 
 	new_X = np.array([new_X])
 
-	print(new_X)
+	#from here have to get all of the same features as the analysis
+	#the pick it apart for the chosen features for the models
+
+	#copied from the my solver file
+	data_variants = [
+		get_polynomial_data(new_X, feature_names, degree=2),
+		get_exponential_inputs(new_X, feature_names),
+		get_negative_exponential_inputs(new_X, feature_names),
+		get_logarithmic_data(new_X, feature_names)
+	]
+
+	#now from here we get the extended feature_names    
+
+	new_X, feature_names = combine_data_variants(data_variants)
+
+	#now we need to condense this
+
+	#copied from the solver file
+	chosen_feature_indexes = []
+
+	for e in chosen_feature_names:
+
+		chosen_feature_indexes.append(feature_names.index(e))
+
+	#now from here we have to get the correct features used in the model found
+
+	new_sources = []
+
+	for each_case in range(len(new_X)):
+
+		new_sources.append(new_X[each_case][chosen_feature_indexes])
+
+	new_sources = np.array(new_sources)
 
 	#now from here we have the sources and can define the splits better
 
@@ -539,11 +597,43 @@ def simulate_new_inputs(inputname,foldername):
 
 				model = all_equations[each_sep][each_outflow][each_feature][2] #get the model
 
-				recovery = model.predict(new_X)
+				recovery = model.predict(new_sources)
 
-				all_equations[each_sep][each_outflow][each_feature].append(recovery)
+				all_equations[each_sep][each_outflow][each_feature].append(recovery[0])
 
-	print(all_equations)
+	#from here we need to setup up the system,
+
+	system, mass_balance = load_entire_system(foldername)
+
+	#run it with a long runtime
+
+	#need to make new_sources ready to be added to the system
+
+	system = add_inputs(system, sources) #give it the sources
+
+	#now from here need to input the calculated splits
+
+	system = add_splits_from_regression(system, all_equations)
+
+	#now run the system
+
+	runtime = int(input("Input Simulation Runtime (higher numbers > 100 for complex systems): "))
+
+	system.run(n = runtime)
+
+	#output the results to a csv and done!
+
+	#now just come up with filename
+
+	filename = inputname.split(".")[0] + "_results.csv" #adjust the input name to make one identical but with the results
+
+	filename = f"modelling/outputs/{filename}"
+
+	output_system_csv(filename, system)
+
+	print(f"System Ran and output to {filename}")
+
+
 
 	return
 
@@ -564,8 +654,6 @@ def main():
 	#start a mainloop
 
 	running = True
-
-	
 
 	while running:
 
@@ -589,6 +677,7 @@ def main():
 			iterations = 20
 			tolerance_dec=tolerance/iterations
 			sim_runtime=25
+			target_error=0.05
 
 			#now from here we want to check if the users want to use the defaults
 
@@ -596,7 +685,7 @@ def main():
 
 			if run_defaults in ["Y", "y", "Yes", "yes"]:
 
-				solve_multiple_cases(system, mass_balance, foldername, trials=1000, tolerance=100,tolerance_dec=2,sim_runtime=25)
+				solve_multiple_cases(system, mass_balance, foldername, trials=1000, tolerance=100,tolerance_dec=2,sim_runtime=25, target_error = 0.05)
 
 			elif run_defaults in ["N", "n", "No", "no"]:
 
@@ -630,7 +719,17 @@ def main():
 
 					sim_runtime = int(input("Input Simulation Runtime (Default 25): "))
 
-				solve_multiple_cases(system, mass_balance, foldername, trials, tolerance,tolerance_dec,sim_runtime)
+				target_error = float(input("Input Simulation Target Error (Default 5%): "))/100
+
+				while target_error < 0:
+
+					print("Error: Invalid Input")
+
+					target_error = float(input("Input Simulation Target Error (Default 5%): "))/100
+
+				solve_multiple_cases(system, mass_balance, foldername, trials, tolerance,tolerance_dec,sim_runtime, target_error)
+
+			print("Solver Finished.\n")
 
 		elif mode in ["A", "a", "Analysis", "analysis"]:
 
@@ -640,15 +739,17 @@ def main():
 
 			foldername = input("Please Input the Case Foldername: ")
 
-			run_defaults = input("Run Solver with Default values?: (Y)es / (N)o: ")
+			#run_defaults = input("Run Solver with Default values?: (Y)es / (N)o: ")
 
-			if run_defaults in ["Y", "y", "Yes", "yes"]:
+			#if run_defaults in ["Y", "y", "Yes", "yes"]:
 
-				print(run_regression_analysis(foldername))
+			run_regression_analysis(foldername)
 
-			elif run_defaults in ["N", "n", "No", "no"]:
+			#elif run_defaults in ["N", "n", "No", "no"]:
 
-				pass
+				#pass
+
+			print("Analysis Finished.\n")
 
 		elif mode in ["M", "m", "Model", "model"]:
 
@@ -664,8 +765,25 @@ def main():
 
 			foldername = input("Please Input the Case Foldername: ")
 
-			simulate_new_inputs(inputname, foldername)
+			
 
+			#now check if they already trained a model
+
+			use_model = input("Do you want to load a model (Y)es / (N)o : ")
+
+			if use_model in ["Y", "y", "Yes", "yes"]:
+
+				print_usable_models()
+
+				model_name = input("Input Model File Name: ")
+
+				simulate_new_inputs(inputname, foldername, model_name)
+
+			elif use_model in  ["N", "n", "No", "no"]:
+
+				simulate_new_inputs(inputname, foldername)
+
+			print("Modelling Finished.\n")
 
 
 		elif mode in ["Q", "q", "Quit", "quit"]:
