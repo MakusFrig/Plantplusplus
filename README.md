@@ -18,8 +18,9 @@ Now fully able to Solve, Analyse, and Model processing plants
 Run the plantplusplus.py file, this will take you to a CLI where you can choose to solve, analyse, or model your processing system.
 There are currently test cases to try
 
-###Inputs
+### Inputs
 Currently uses basic excel sheets to define a system of sources, separators, and collectors.
+
 <img width="298" height="200" alt="image" src="https://github.com/user-attachments/assets/9763265e-60fd-470a-9f8b-262cf198adc6" />
 As shown above first column is type definition, second is name, third+ are the outputs if a separator. More docs to come.
 
