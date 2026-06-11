@@ -230,6 +230,27 @@ def add_inputs(system, inputs):
 
 	return system
 
+#This function will add the calculated splits from regression to a system
+def add_splits_from_regression(system, all_equations):
+
+	for each_sep in all_equations.keys():
+
+		for each_outflow in all_equations[each_sep].keys():
+
+			for each_feature in all_equations[each_sep][each_outflow].keys():
+
+				#here the each_sep is the sep name
+				#each_outflow is a number (index)
+				#each_feature is the index of the feature
+
+				seperator_index = system.separators_names.index(each_sep)
+
+				feature_index = list(all_equations[each_sep][each_outflow].keys()).index(each_feature) #this is so we can get the right feature in the splits
+
+				system.separators[seperator_index].splits[each_outflow][feature_index] = all_equations[each_sep][each_outflow][each_feature][3] #3 is the index of the calculated split
+
+	return system
+
 #this funciton will go through a dictionary of slurries and divide each number
 #mostly used for turning daily totals to hourly inputs etc
 def divide_slurries(slurries, x):
@@ -562,7 +583,25 @@ def print_usable_cases():
 #Helper function for the CLI to print out the mass_balance inputs for modelling
 def print_usable_model_inputs():
 
-	model_dir = "modelling"
+	model_dir = "modelling/inputs"
+
+	model_dir = pathlib.Path.cwd() / model_dir
+
+	print("Input Options: ")
+
+	for each_file in model_dir.iterdir():
+
+		if each_file.is_file():
+
+			print(f"{each_file.name}", end=" ")
+
+	print("")
+
+	return
+
+def print_usable_models():
+
+	model_dir = "modelling/models"
 
 	model_dir = pathlib.Path.cwd() / model_dir
 
@@ -581,7 +620,7 @@ def print_usable_model_inputs():
 #A function to load new inputs to try with the regression model
 def load_new_inputs_csv(inputname):
 
-	file_obj = open(f"modelling/{inputname}")
+	file_obj = open(f"modelling/inputs/{inputname}")
 
 	csv_reader = csv.reader(file_obj)
 
