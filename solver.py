@@ -1,4 +1,6 @@
 import copy
+import random
+import pickle
 import numpy as np
 import pandas as pd
 from gplearn.genetic import SymbolicRegressor
@@ -202,6 +204,182 @@ def determine_best_equations(all_equations, separator_feature_names):
     return all_equations
 
 #
+#Function to combine all of the data variants (currently working)
+#
+def combine_data_variants(data_variants):
+
+    new_X = np.array([[] for i in range(len(data_variants[0][0]))])
+
+    new_feature_names = []
+
+    for each_X, each_feature in data_variants:
+
+        for each_fe in range(len(each_feature)):
+
+            new_feature_names.append(each_feature[each_fe])
+
+        new_X = np.hstack((new_X, each_X))
+
+    return new_X, new_feature_names
+
+#
+#Function to go through an equations object (nested dictionary) get all the r2 scores and return their average
+#
+def get_average_r2_score(all_equations):
+
+    n = 0
+
+    total = 0
+
+    for each_sep in all_equations.keys():
+
+        for each_outflow in all_equations[each_sep].keys():
+
+            for each_feature in all_equations[each_sep][each_outflow].keys():
+
+                r2_score = all_equations[each_sep][each_outflow][each_feature][0][0]
+
+                total+= r2_score
+
+                n += 1
+
+
+    return total / n
+
+#
+#Function to find the best r2 value with lowest # of features and determine the best equation to use
+#
+def get_best_use_model(results, max_features):
+
+    #this function will take the results of finding the best inputs
+    #instead of simply returning the one with the best r2 score it will try and balance
+    #both the simplicity of the function and the r2 score
+
+    best_adjusted_r2_score = -1
+
+    best_features = None
+
+    new_results = {}
+
+    for each_features in results.keys():
+
+        num_features = len(each_features.split(","))
+
+        r2_score = results[each_features]
+
+        if num_features not in list(new_results.keys()):
+
+            new_results[num_features] = [r2_score, each_features]
+
+        else:
+
+            #basically we have already evaluated
+
+            if r2_score > new_results[num_features][0]:
+
+                new_results[num_features] = [r2_score, each_features]
+
+    
+
+    for each_num_fe in new_results.keys():
+        print(f"{"="*60}")
+        print(f"Best Equation found, Mean r2 score: {new_results[each_num_fe][0]}\nWith # of Features: {each_num_fe}\nBest Features: {new_results[each_num_fe][1]}")
+
+        print(f"{"="*60}\n")
+
+    return new_results
+
+
+#
+#Function to find the best linear regression based on the inputs
+#
+def find_best_inputs(sources, splits, feature_names, separator_feature_names, iterations = 1):
+
+    #this function will sequentially choose from the features in sources
+    #run the linear regression
+    #find out which has the best r2 value
+    #return the feature names that provides it with the best
+    #all while limiting # of features to avoid overfitting
+
+    #first determine the max number of features = #of cases -1
+
+    #print(sources)
+
+    max_features = len(sources)-1
+
+    possible_features = len(feature_names)
+
+    results = {} #this dictionary will store an array of the features used and their r2 score
+
+    for each_num_fe in range(1, max_features+1):
+
+        for each_trial in range(iterations):
+
+            print(f"\rSearching {each_num_fe} features for a solution", end="")
+
+            #from here we randomly choose which features we use for this trial
+
+            feature_indexes = random.sample(range(max_features), each_num_fe)
+
+            
+
+            #now we have the indexes we want to create a new  subset of x
+
+            #its important to know that the current sources is grouped by case (month)
+
+            #each month has a feature
+
+            temp_X = []
+
+            for each_case in range(len(sources)):
+
+                temp_X.append(
+                    np.array(sources[each_case]).copy()[feature_indexes]
+                )
+            temp_X = np.array(temp_X)
+
+            
+
+            temp_feature_names = np.array(feature_names)[feature_indexes]
+
+            #now from here we want to run linear regression
+
+            temp_equations = get_empty_splits(splits) #this gives us something to return stuff to
+
+            temp_equations = run_linear_regression(temp_X, splits,  temp_feature_names, temp_equations)
+
+            #from here we want to get the average r2 of this run
+
+            average_r2_score = get_average_r2_score(temp_equations)
+
+            #now from here append to the results dictionary
+
+            results[",".join(list(temp_feature_names))] = average_r2_score
+
+    
+    print("\r\x1b[K\n") #this is just to clear the output in the command line
+
+    #from here iterate through the results
+
+    best_r2_score = -1
+
+    best_features = None
+
+    for each_combination in results.keys():
+
+        if results[each_combination] > best_r2_score:
+
+            best_r2_score = results[each_combination]
+
+            best_features = each_combination
+
+    #print(f"Best Equation found, Mean r2 score: {best_r2_score}\nWith # of Features: {len(best_features.split(","))}\nBest Features: {best_features}")
+
+    results = get_best_use_model(results, max_features)
+
+    return results
+
+#
 #Function to run all the different types of regression and return which ones have the best r2 score
 #
 def run_all_regression(sources, splits, feature_names=None, separator_feature_names=None):
@@ -225,22 +403,80 @@ def run_all_regression(sources, splits, feature_names=None, separator_feature_na
     #and then add whatever you want 
 
     data_variants = [
-        (sources, feature_names),
         get_polynomial_data(sources, feature_names, degree=2),
         get_exponential_inputs(sources, feature_names),
         get_negative_exponential_inputs(sources, feature_names),
         get_logarithmic_data(sources, feature_names)
     ]
 
-    #regression and append results
-    for src, feat in data_variants:
-        all_equations = run_linear_regression(src, splits,  feat, all_equations)
-        
+    #from here we want to combine all the differnet columns into one
 
-        
+    
 
-    all_equations = determine_best_equations(all_equations, separator_feature_names)    
-    return all_equations
+    new_X, feature_names = combine_data_variants(data_variants)
+
+    #now from here we want to run it through our algorithm
+    
+    #get some input from the users
+    iterations = int(input("How many iterations for each number of features (Higher number will find more solutions but may take longer): "))
+
+    results = find_best_inputs(new_X, splits, feature_names, separator_feature_names, iterations = iterations)
+
+    #from here we've printed out all of the options, now query the user for the # of features they want to use
+
+    print("\nSelect # of features you want to use to model output (Warning: Higher # of features can cause overfitting)")
+    num_features = int(input("Input Desired number of features to use for modelling: "))
+
+    #now from here we go through the results, get the features name, then get the inputs, run the linear regression and use the model
+
+    chosen_feature_names = results[num_features][1].split(",")
+
+    #from here we want to index each of them, create the new inputs and run the regression model
+
+    chosen_feature_indexes = []
+
+    for e in chosen_feature_names:
+
+        chosen_feature_indexes.append(feature_names.index(e))
+
+    #now from here we have to get the sources correct
+
+    new_sources = []
+
+    for each_case in range(len(new_X)):
+
+        new_sources.append(new_X[each_case][chosen_feature_indexes])
+
+    new_sources = np.array(new_sources)
+
+
+
+    all_equations = run_linear_regression(new_sources, splits, chosen_feature_names, all_equations, output=False)
+
+    all_equations = determine_best_equations(all_equations, separator_feature_names)  
+
+    #from here we want to check if they want to save the model
+
+    save_model = input("Do you want to save the model (Y)es / (N)o : ")
+
+    if save_model in ["Y", "y", "Yes", "yes"]:
+
+        save_model_name = input("Save File Name: ")
+
+        save_model_filename = "modelling/models/" + save_model_name + ".pkl"
+
+        save_package = [all_equations, chosen_feature_names]
+
+        with open(save_model_filename, "wb") as file_obj:
+
+            pickle.dump(save_package, file_obj)
+
+        file_obj.close()
+
+        print(f"Model Saved to: {save_model_filename}")
+
+
+    return all_equations, chosen_feature_names
 
 #
 #Function for preparing exponential data
@@ -289,6 +525,8 @@ def get_polynomial_data(sources, feature_names, degree=2):
     new_feature_names = copy.deepcopy(feature_names)
 
     new_X = np.array(sources).copy() 
+
+
 
     for each_degree in range(2, degree+1):
 
@@ -353,22 +591,24 @@ def run_linear_regression(sources, splits, feature_names, all_equations, output=
 
                 y = np.array(splits[each_sep][each_outflow][each_feature]) #turny into a numpy array for ease
 
+                
+
                 loo_preds = np.zeros(len(y))
                 
-                #now loop through each case
-                for train_index, test_index in loo.split(new_X):
-                    X_train, X_test = new_X[train_index], new_X[test_index]
-                    y_train, y_test = y[train_index], y[test_index]
-                    
-                    #try and fit the model on 11 months of data
-                    cv_model = LinearRegression()
-                    cv_model.fit(X_train, y_train)
-                    
-                    #predict the last case
-                    loo_preds[test_index] = cv_model.predict(X_test)
-                    
-                #now get the r2 score
-                val_r2 = r2_score(y, loo_preds)
+                """#now loop through each case
+                                                                for train_index, test_index in loo.split(new_X):
+                                                                    X_train, X_test = new_X[train_index], new_X[test_index]
+                                                                    y_train, y_test = y[train_index], y[test_index]
+                                                                    
+                                                                    #try and fit the model on 11 months of data
+                                                                    cv_model = LinearRegression()
+                                                                    cv_model.fit(X_train, y_train)
+                                                                    
+                                                                    #predict the last case
+                                                                    loo_preds[test_index] = cv_model.predict(X_test)
+                                                                    
+                                                                #now get the r2 score
+                                                                val_r2 = r2_score(y, loo_preds)"""
                 
                 #now train the model on all the data
                 model = LinearRegression()
