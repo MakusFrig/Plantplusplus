@@ -20,7 +20,6 @@ There are currently test cases to try
 
 ### Inputs
 Currently uses basic excel sheets to define a system of sources, separators, and collectors.
-
 <img width="298" height="200" alt="image" src="https://github.com/user-attachments/assets/9763265e-60fd-470a-9f8b-262cf198adc6" />
 As shown above first column is type definition, second is name, third+ are the outputs if a separator. More docs to come.
 
