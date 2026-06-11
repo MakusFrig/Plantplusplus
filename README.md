@@ -1,4 +1,4 @@
-# Plantplusplus
+# Plant++
 <img width="597" height="193" alt="image" src="https://github.com/user-attachments/assets/4eada813-50ea-4ee2-984b-e81f36346b33" />
 
 Plan++ is a personal project I created to simulate+model complex processing plants with excel inputs in mind. Specifically the goal is to be able to quantitatively solve how seperators behave based on inputs using a monte carlo-like method. The idea is to randomly chose recovery splits in a processing plant, measure error to the mass balance and refine the search. Additionally, the trials are allowed to branch to different generated systems with low error so as not to get "stuck" on the wrong system definition. For 3+ output separators that require 3 different recovery % numbers adding to one trials with the dirichlet distribution for rng have proved to be more difficult and currently use a more basic method but will upgrade later.
